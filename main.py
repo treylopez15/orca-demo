@@ -31,6 +31,17 @@ class AskRequest(BaseModel):
     question: str
 
 
+def _demo_api_ask_answer(question: str) -> str:
+    q = (question or "").lower()
+    if "api" in q:
+        return "An API (Application Programming Interface) lets systems communicate with each other."
+    if "ach" in q:
+        return "The team delayed the ACH rollout due to reconciliation edge cases."
+    if "wire" in q:
+        return "A missing routing number caused the wire rejection."
+    return "Based on Slack history, no major issues were identified. Team activity looks stable."
+
+
 class BroadcastSendRequest(BaseModel):
     channel_ids: list[str]
     message: str
@@ -52,6 +63,28 @@ def api_config() -> Dict[str, Any]:
 def health() -> Dict[str, Any]:
     """Load balancer / ops probe; no secrets."""
     return {"status": "ok", "demoMode": is_demo_mode()}
+
+
+@app.post("/api/ingest")
+def api_ingest_demo() -> Dict[str, Any]:
+    """Demo-only: fake ingest success for /api/* clients."""
+    if not is_demo_mode():
+        raise HTTPException(status_code=404, detail="Available in demo mode only")
+    return {
+        "status": "success",
+        "channels": ["#payments", "#ops", "#alerts"],
+        "messagesIndexed": 1287,
+    }
+
+
+@app.post("/api/ask")
+def api_ask_demo(body: AskRequest) -> Dict[str, Any]:
+    """Demo-only: keyword-based simulated answer; body must include \"question\"."""
+    if not is_demo_mode():
+        raise HTTPException(status_code=404, detail="Available in demo mode only")
+    if not body.question.strip():
+        raise HTTPException(status_code=400, detail="Question must not be empty")
+    return {"answer": _demo_api_ask_answer(body.question)}
 
 
 @app.post("/ingest")
