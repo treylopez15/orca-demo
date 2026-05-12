@@ -1,120 +1,121 @@
-# ORCA
+# ORCA – Operational Response & Channel Analytics
 
-**ORCA** (Operational Response & Channel Analytics) is an internal operations tool for Slack-backed support analytics, optional RAG question answering, and controlled multi-channel broadcast.
+🚀 **Live Demo:** [http://44.203.210.245:3000](http://44.203.210.245:3000)  
+📦 **GitHub:** [github.com/treylopez15/orca-demo](https://github.com/treylopez15/orca-demo)
 
-This repository supports two deployment personalities:
+---
 
-- **Internal mode** — live Slack APIs, embeddings ingest, RAG answers, real broadcasts. Requires secrets via environment variables (see `.env.example`).
-- **Demo mode** — set `DEMO_MODE=true` to serve **synthetic** analytics and **simulate** ingest, ask, and broadcast with **no external side effects**.
+## 1. Overview
 
-## Features
+ORCA (Operational Response & Channel Analytics) is a lightweight analytics and assistant layer for Slack-based teams.
 
-- **Analytics** — first-response and follow-up response metrics, peak-time heatmaps, API traffic patterns, endpoint mix (from the same sampled window as Slack analytics when not in demo mode).
-- **ORCA Copilot** — short narrative insight block on top of analytics + insights.
-- **API traffic patterns** — daily call trend and “spike / drop-off / steady” style hints (demo data illustrates each pattern per channel).
-- **Broadcast** — multi-channel send with confirmation; in demo mode the send is simulated and always succeeds.
+It helps teams:
 
-## Architecture
+- understand response performance across channels  
+- identify peak activity and bottlenecks  
+- query historical conversations using an AI-style interface  
 
-| Layer | Stack |
-|-------|--------|
-| API | **Python 3**, **FastAPI**, **Uvicorn** |
-| UI | **Static HTML/CSS/JS** served from `/ui` (no React build step in-repo) |
-| Data (demo) | `data/demo_dataset.py`, `data/demo_companies.py` |
-| UI I/O | `ui/dataProvider.js` (all `fetch` calls); optional TypeScript mirror `data/dataProvider.ts` for contracts / future tooling |
+This public demo runs in **demo mode**, using simulated data to safely showcase functionality without exposing real Slack data.
 
-## Configuration
+This project demonstrates end-to-end system design, including API development, frontend integration, analytics modeling, and cloud deployment.
 
-Copy `.env.example` to `.env` for local development. **Never commit `.env`.**
+---
 
-- **`DEMO_MODE`**: when `true`, the server never calls Slack for analytics/insights, never runs RAG for `/ask`, and never posts broadcasts; the UI shows the **Demo Environment** banner when this mode is active.
-- **`PORT`**: listen port for Uvicorn (default `8000` in Docker; sample Compose maps host `3000` → container `8000`).
+## 2. Live Demo
 
-## Demo deployment
+**Live app:** [http://44.203.210.245:3000](http://44.203.210.245:3000) — opens the ORCA UI (root redirects to `/ui/`).
 
-Use this for **Lightsail**, laptops, or any host with Docker. Demo mode uses **synthetic** analytics and **simulated** ingest, ask, and broadcast — **no real Slack writes** and **no RAG / external LLM calls** for `/ask`.
+### Demo Walkthrough
 
-### Local Docker
+1. Open the app at the link above.  
+2. Go to **Search & ingest** and click **Ingest Slack messages** (simulated in demo mode).  
+3. Ask a question, for example:  
+   - *“what is an api?”*  
+   - *“what caused the wire rejection?”*  
+4. Open **Analytics** to view response metrics, peak activity, API traffic patterns, and the Copilot summary.
 
-1. Ensure Docker Compose is installed.
-2. From the repo root, create `.env` if you do not already have one:
+**Also worth trying (about two minutes):**
 
-   ```bash
-   bash scripts/ensure-docker-env.sh
-   ```
+- Confirm the header shows **Demo Environment — identifiers masked, data simulated** when demo mode is active.  
+- **Broadcast** — select channels, compose a message, confirm; in demo mode nothing is posted to Slack.
 
-   By default this copies `.env.example` (includes `DEMO_MODE=true` and `PORT=8000`). On **public demo** servers use a **minimal** `.env` (only those two lines) so you never inject production Slack/OpenAI keys into the container. Edit `.env` for internal mode (secrets + `DEMO_MODE=false`).
+---
 
-3. Build and run:
+## 3. Features
 
-   ```bash
-   docker compose config
-   docker compose up -d --build
-   docker compose logs -f
-   ```
+| Area | What it does |
+|------|----------------|
+| **Slack ingestion** | In **internal** mode, pulls thread history and builds embeddings for RAG. In **demo** mode, ingest is **mocked**—no Slack API calls for that action. |
+| **Question answering** | In **internal** mode, `/ask` uses retrieval + LLM over indexed Slack text. In **demo** mode, answers are **simulated** (including keyword-style replies on `/api/ask`). |
+| **Analytics dashboard** | First- and follow-up **response times**, **peak message times** (heatmap-style), **API traffic** trends, top endpoints, and an **ORCA Copilot** insight strip. Demo mode uses a **deterministic synthetic dataset** so charts always populate. |
+| **Broadcast** | Multi-channel message flow with **confirmation** before send. In demo mode, the send is **simulated** and returns success without posting to Slack. |
 
-4. Open the UI: **`http://localhost:3000/ui/`**
+---
 
-5. Healthcheck: **`http://localhost:3000/health`** — expect `{"status":"ok","demoMode":true}` when demo is enabled.
+## 4. How to Use (UI Guide)
 
-6. Optional automated checks (requires `curl`; uses `BASE_URL`, default `http://127.0.0.1:3000`):
+For someone opening the app for the first time:
 
-   ```bash
-   bash scripts/validate-demo-deployment.sh
-   ```
+1. **Open the app** — use the [live demo](http://44.203.210.245:3000) link at the top.  
+2. **Search & ingest** — click **Ingest Slack messages**, then use **Ask** with a short question (see Demo Walkthrough for examples).  
+3. **Broadcast** — pick channels, write a message, send, then **confirm** in the modal.  
+4. **Analytics** — click **Refresh** if needed; use **Channel** and **Timezone** to explore KPIs, charts, traffic status, and Copilot.
 
-### Manual demo checklist
+---
 
-- Header shows **Demo Environment — identifiers masked, data simulated** when `demoMode` is true.
-- **`GET /health`** returns `"status":"ok"` and correct `demoMode`.
-- **Broadcast** confirm flow completes with a simulated success line (see API `message` field).
-- **Channel labels** in Analytics / Broadcast use masked names where configured (`makeba-support` → `client-a-support`, etc.).
-- **Analytics** loads without Slack (synthetic bundle).
+## 5. Technical Architecture
 
-### Internal / live mode
+- **FastAPI** backend for API and data handling  
+- **Static frontend** (HTML / CSS / JS) for a lightweight UI — network calls are centralized in `ui/dataProvider.js`  
+- **Dockerized** for consistent local and cloud deployment (`Dockerfile`, `docker-compose.yml`)  
+- **Hosted on AWS Lightsail** for cost-efficient public access (host port **3000** → container **8000**)
 
-Unchanged: set **`DEMO_MODE=false`** or remove it in `.env`, provide Slack/OpenAI variables per `.env.example`, and run the same stack — the app uses live Slack and real writes again.
+**Data flow:** UI → FastAPI endpoints → (mocked Slack ingestion / analytics layer in demo, or live Slack + compute in internal mode) → structured JSON → rendered in the UI.
 
-## Run locally
+---
 
-### Python (recommended)
+## 6. API Endpoints (selected)
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-cp .env.example .env        # then edit secrets for internal mode
-export DEMO_MODE=true       # omit for internal Slack mode
-uvicorn main:app --reload --host 127.0.0.1 --port 8000
-```
+| Method & path | Purpose |
+|---------------|---------|
+| **`POST /api/ingest`** | Demo-oriented ingest stub. Returns a fixed **success** payload with sample channel names and a fake indexed count. **Active when `DEMO_MODE=true`**; otherwise **404** so production stacks don’t depend on mock data. |
+| **`POST /api/ask`** | JSON body: `{ "question": "..." }`. Returns `{ "answer": "..." }` with a **simulated** answer (keyword routing for substrings like `api`, `ach`, `wire`). **Demo-only** (`DEMO_MODE=true`). **`POST /ask`** remains for full RAG when not in demo mode. |
+| **`GET /health`** | Liveness probe: `{ "status": "ok", "demoMode": true|false }`. Safe for load balancers and scripts. |
 
-Open **`http://127.0.0.1:8000/ui/`**.
+Additional routes (broadcast, analytics, insights, roles, config, etc.) live in **`main.py`**; operators can see **`DEPLOYMENT.md`** for runbooks.
 
-### npm convenience scripts
+---
 
-After Python dependencies are installed, you can start the API with:
+## 7. Running Locally
 
 ```bash
-npm run dev   # uvicorn reload on port 8000 (requires python3 + pip deps on PATH)
-```
-
-There are **no Node module dependencies** for the UI; `package.json` exists only for these helper scripts.
-
-### Docker
-
-```bash
-bash scripts/ensure-docker-env.sh   # creates .env from .env.example if missing
+git clone https://github.com/treylopez15/orca-demo.git
+cd orca-demo
+printf '%s\n' 'DEMO_MODE=true' 'PORT=8000' > .env
 docker compose up -d --build
 ```
 
-Then open **`http://localhost:3000/ui/`** and **`http://localhost:3000/health`** (see `docker-compose.yml` port mapping `3000:8000`).
+Open:
 
-More detail: **`DEPLOYMENT.md`**.
+- **App:** [http://localhost:3000/ui/](http://localhost:3000/ui/) (or [http://localhost:3000](http://localhost:3000))  
+- **Health:** [http://localhost:3000/health](http://localhost:3000/health)
 
-## Identifier masking (demo UI)
+If `docker compose` is unavailable, try **`docker-compose`**. Ensure Docker is running before `up`.
 
-When `DEMO_MODE` is on, the browser maps display-only labels (for example `makeba-support` → `client-a-support`, `nuvion-braid` → `client-b-support`) in **`ui/channelMask.js`**. API payloads are unchanged; only labels shown in the UI are aliased.
+---
 
-## License / ops
+## 8. Notes on Demo Mode
 
-Add your org’s license and support contacts as needed.
+- **No real Slack data** for analytics, insights, ingest, ask, or broadcast when `DEMO_MODE=true`.  
+- **Responses are simulated** or synthetic so reviewers always see a full UI.  
+- **Safe for interviews and portfolio reviews** — no tokens or customer payloads; the UI can **mask** a few channel display names in demo.
+
+For **production-style** use, set `DEMO_MODE=false`, add Slack and model credentials per **`.env.example`**, and deploy the same stack.
+
+---
+
+## 9. Why This Project
+
+This project was built to demonstrate the ability to **design and deploy a complete, user-facing system** — from API design and data modeling to UI integration and cloud deployment.
+
+It also reflects a focus on building **practical internal tools** that improve visibility, response efficiency, and operational insight for teams. The **demo mode** layer shows the same rigor applied to **safe public demos** without maintaining a separate codebase.
