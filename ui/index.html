@@ -1,0 +1,941 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>ORCA · Operational Response &amp; Channel Analytics</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg-0: #0b1224;
+        --bg-1: #0f2744;
+        --bg-2: #0c3d52;
+        --accent: #22d3ee;
+        --card: rgba(255, 255, 255, 0.97);
+        --card-border: rgba(148, 163, 184, 0.35);
+        --text: #0f172a;
+        --muted: #64748b;
+        --radius: 16px;
+        --shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.45);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        color: var(--text);
+        background-color: var(--bg-0);
+        background-image:
+          radial-gradient(ellipse 120% 80% at 50% -20%, rgba(34, 211, 238, 0.18), transparent 55%),
+          radial-gradient(ellipse 90% 60% at 100% 0%, rgba(129, 140, 248, 0.2), transparent 50%),
+          radial-gradient(ellipse 70% 50% at 0% 100%, rgba(14, 165, 233, 0.12), transparent 45%),
+          linear-gradient(165deg, var(--bg-0) 0%, var(--bg-1) 42%, var(--bg-2) 100%);
+        background-attachment: fixed;
+      }
+
+      .page {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: clamp(1.5rem, 4vw, 3rem) 1.25rem 3rem;
+      }
+
+      .tabs {
+        display: flex;
+        gap: 0.35rem;
+        margin-bottom: 1rem;
+        padding: 0.2rem;
+        background: rgba(15, 23, 42, 0.45);
+        border-radius: 12px;
+        border: 1px solid rgba(148, 163, 184, 0.2);
+      }
+
+      .tab {
+        flex: 1;
+        padding: 0.55rem 0.85rem;
+        border: none;
+        border-radius: 9px;
+        font-family: inherit;
+        font-size: 0.88rem;
+        font-weight: 600;
+        cursor: pointer;
+        background: transparent;
+        color: rgba(226, 232, 240, 0.65);
+        transition: background 0.15s ease, color 0.15s ease;
+      }
+
+      .tab:hover {
+        color: #f8fafc;
+      }
+
+      .tab.active {
+        background: rgba(255, 255, 255, 0.12);
+        color: #f8fafc;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+      }
+
+      .panel {
+        display: none;
+      }
+
+      .panel.panel--active {
+        display: block;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 1.75rem;
+      }
+
+      .brand-logo {
+        width: 76px;
+        height: 76px;
+        border-radius: 14px;
+        box-shadow: 0 10px 28px rgba(99, 102, 241, 0.35), 0 0 0 1px rgba(34, 211, 238, 0.2);
+        flex-shrink: 0;
+      }
+
+      .brand-copy {
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+      }
+
+      .brand-name {
+        margin: 0;
+        font-size: 1.85rem;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        color: #f8fafc;
+        line-height: 1;
+        text-transform: uppercase;
+      }
+
+      .brand-name abbr {
+        text-decoration: none;
+        border-bottom: none;
+      }
+
+      .brand-subtitle {
+        margin: 0;
+        font-size: 0.72rem;
+        font-weight: 500;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: rgba(186, 230, 253, 0.72);
+      }
+
+      .demo-environment-badge {
+        margin-left: auto;
+        align-self: center;
+        max-width: min(100%, 22rem);
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        line-height: 1.35;
+        text-transform: none;
+        text-align: center;
+        color: #422006;
+        background: linear-gradient(135deg, #fde68a, #f59e0b);
+        padding: 0.45rem 0.85rem;
+        border-radius: 12px;
+        box-shadow: 0 4px 14px rgba(245, 158, 11, 0.35);
+        border: 1px solid rgba(251, 191, 36, 0.9);
+      }
+
+      .demo-environment-badge[hidden] {
+        display: none !important;
+      }
+
+      .card {
+        background: var(--card);
+        border: 1px solid var(--card-border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        padding: clamp(1.25rem, 3vw, 1.75rem);
+        backdrop-filter: blur(8px);
+      }
+
+      .card h1 {
+        margin: 0 0 1.25rem;
+        font-size: 1.15rem;
+        font-weight: 600;
+        color: var(--text);
+        letter-spacing: -0.02em;
+      }
+
+      .section {
+        margin-bottom: 1.5rem;
+        padding: 1rem 1rem 1.1rem 1.15rem;
+        border-radius: 12px;
+        border: 1px solid #e2e8f0;
+        border-left: 4px solid rgba(34, 211, 238, 0.75);
+        background: rgba(248, 250, 252, 0.92);
+      }
+
+      .section:last-of-type {
+        margin-bottom: 0;
+      }
+
+      .section--ask {
+        border-left-color: rgba(99, 102, 241, 0.55);
+        background: rgba(255, 255, 255, 0.55);
+      }
+
+      .section__title {
+        margin: 0 0 0.35rem;
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: #0f172a;
+        letter-spacing: -0.02em;
+      }
+
+      .section__desc {
+        margin: 0 0 0.85rem;
+        font-size: 0.82rem;
+        color: #475569;
+        line-height: 1.45;
+      }
+
+      .row {
+        margin-bottom: 1.25rem;
+      }
+
+      .row:last-child {
+        margin-bottom: 0;
+      }
+
+      label {
+        display: block;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: #334155;
+        margin-bottom: 0.5rem;
+      }
+
+      textarea {
+        width: 100%;
+        min-height: 100px;
+        padding: 0.75rem 0.85rem;
+        border-radius: 12px;
+        border: 1px solid #cbd5e1;
+        font-family: inherit;
+        font-size: 0.95rem;
+        line-height: 1.5;
+        resize: vertical;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+      }
+
+      textarea:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.25);
+      }
+
+      .broadcast-select {
+        width: 100%;
+        min-height: 170px;
+        border-radius: 12px;
+        border: 1px solid #cbd5e1;
+        background: #fff;
+        padding: 0.55rem;
+        font-family: inherit;
+        font-size: 0.92rem;
+        color: #0f172a;
+      }
+
+      .broadcast-select:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.25);
+      }
+
+      .broadcast-help {
+        margin: 0.45rem 0 0;
+        font-size: 0.78rem;
+        color: #64748b;
+      }
+
+      .broadcast-announce {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        font-size: 0.88rem;
+        color: #334155;
+      }
+
+      .broadcast-announce input[type="checkbox"] {
+        width: 1rem;
+        height: 1rem;
+      }
+
+      .broadcast-summary {
+        margin-top: 0.75rem;
+        font-size: 0.86rem;
+        line-height: 1.5;
+      }
+
+      .broadcast-summary ul {
+        margin: 0.5rem 0 0;
+        padding-left: 1rem;
+      }
+
+      .modal {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+        background: rgba(15, 23, 42, 0.55);
+        z-index: 999;
+      }
+
+      .modal.modal--open {
+        display: flex;
+      }
+
+      .modal-card {
+        width: min(640px, 100%);
+        max-height: 88vh;
+        overflow: auto;
+        background: #fff;
+        border-radius: 14px;
+        border: 1px solid #dbe4ee;
+        box-shadow: 0 18px 50px rgba(15, 23, 42, 0.35);
+        padding: 1rem 1rem 1.1rem;
+      }
+
+      .modal-title {
+        margin: 0 0 0.6rem;
+        font-size: 1rem;
+        color: #0f172a;
+      }
+
+      .modal-body {
+        margin: 0 0 0.85rem;
+        font-size: 0.88rem;
+        color: #334155;
+      }
+
+      .modal-preview {
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        background: #f8fafc;
+        padding: 0.65rem 0.75rem;
+        margin-bottom: 0.8rem;
+      }
+
+      .modal-preview p {
+        margin: 0 0 0.5rem;
+        font-size: 0.84rem;
+        color: #334155;
+      }
+
+      .modal-preview pre {
+        margin: 0;
+        white-space: pre-wrap;
+        font-family: inherit;
+        font-size: 0.88rem;
+        color: #0f172a;
+      }
+
+      .modal-channels {
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        background: #f8fafc;
+        padding: 0.65rem 0.75rem;
+        margin-bottom: 0.85rem;
+      }
+
+      .modal-channels p {
+        margin: 0 0 0.35rem;
+        font-size: 0.84rem;
+        color: #334155;
+      }
+
+      .modal-channels ul {
+        margin: 0;
+        padding-left: 1rem;
+        font-size: 0.84rem;
+        color: #0f172a;
+      }
+
+      .controls {
+        display: flex;
+        gap: 0.6rem;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+
+      button {
+        padding: 0.55rem 1.15rem;
+        border-radius: 10px;
+        border: none;
+        font-family: inherit;
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease;
+      }
+
+      button:active:not(:disabled) {
+        transform: translateY(1px);
+      }
+
+      button.primary {
+        background: linear-gradient(135deg, #0891b2 0%, #6366f1 100%);
+        color: #fff;
+        box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+      }
+
+      button.primary:hover:not(:disabled) {
+        box-shadow: 0 6px 20px rgba(99, 102, 241, 0.45);
+      }
+
+      button.secondary {
+        background: #1e293b;
+        color: #f8fafc;
+      }
+
+      button.secondary:hover:not(:disabled) {
+        background: #334155;
+      }
+
+      button:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+        box-shadow: none;
+      }
+
+      .status {
+        font-size: 0.82rem;
+        color: var(--muted);
+        min-height: 1.25em;
+        margin-top: 0.5rem;
+      }
+
+      .status--warn {
+        color: #92400e;
+      }
+
+      .roles-hint {
+        font-size: 0.78rem;
+        color: #64748b;
+        margin-top: 0.5rem;
+        line-height: 1.4;
+      }
+
+      .section-title {
+        font-size: 0.95rem;
+        font-weight: 600;
+        margin: 0 0 0.5rem;
+        color: #334155;
+      }
+
+      .answer {
+        white-space: pre-wrap;
+        border-radius: 12px;
+        background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+        padding: 1rem 1.1rem;
+        border: 1px solid #e2e8f0;
+        min-height: 72px;
+        line-height: 1.55;
+        font-size: 0.95rem;
+        color: #1e293b;
+      }
+
+      .analytics-hint {
+        font-size: 0.82rem;
+        color: var(--muted);
+        margin-bottom: 1rem;
+        line-height: 1.45;
+      }
+
+      .analytics-data-notice {
+        font-size: 0.84rem;
+        line-height: 1.5;
+        color: #78350f;
+        background: #fffbeb;
+        border: 1px solid #fcd34d;
+        border-radius: 10px;
+        padding: 0.75rem 1rem;
+        margin-bottom: 1rem;
+      }
+
+      .copilot-card {
+        border: 1px solid #c7d2fe;
+        background: linear-gradient(180deg, #eef2ff 0%, #f8fafc 100%);
+        border-left: 4px solid #6366f1;
+        border-radius: 12px;
+        padding: 0.95rem 1rem;
+      }
+
+      .copilot-title {
+        margin: 0 0 0.75rem;
+        font-size: 1rem;
+        font-weight: 700;
+        color: #312e81;
+      }
+
+      .copilot-row {
+        margin-bottom: 0.75rem;
+      }
+
+      .copilot-row:last-child {
+        margin-bottom: 0;
+      }
+
+      .copilot-row h3 {
+        margin: 0 0 0.25rem;
+        font-size: 0.9rem;
+        color: #1e293b;
+      }
+
+      .copilot-row p {
+        margin: 0;
+        font-size: 0.86rem;
+        line-height: 1.45;
+        color: #334155;
+      }
+
+      .kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 0.75rem;
+        margin-bottom: 1.5rem;
+      }
+
+      .kpi-card {
+        background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 0.85rem 1rem;
+      }
+
+      .kpi-card .kpi-label {
+        font-size: 0.72rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #64748b;
+        margin-bottom: 0.35rem;
+      }
+
+      .kpi-card .kpi-value {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #0f172a;
+        letter-spacing: -0.02em;
+      }
+
+      .kpi-card .kpi-unit {
+        font-size: 0.75rem;
+        font-weight: 500;
+        color: #64748b;
+      }
+
+      .analytics-block {
+        margin-bottom: 1.75rem;
+      }
+
+      .analytics-block:last-child {
+        margin-bottom: 0;
+      }
+
+      .analytics-block h2 {
+        margin: 0 0 0.65rem;
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #334155;
+      }
+
+      .heatmap-wrap {
+        overflow-x: auto;
+        border-radius: 12px;
+        border: 1px solid #e2e8f0;
+        background: #f8fafc;
+      }
+
+      .heatmap {
+        border-collapse: collapse;
+        font-size: 0.65rem;
+      }
+
+      .heatmap th,
+      .heatmap td {
+        padding: 2px 3px;
+        text-align: center;
+        border: 1px solid #e2e8f0;
+      }
+
+      .heatmap th.corner {
+        background: #f1f5f9;
+        min-width: 2.25rem;
+      }
+
+      .heatmap th.hour {
+        background: #f1f5f9;
+        font-weight: 600;
+        color: #475569;
+        font-size: 0.52rem;
+        line-height: 1.1;
+        min-width: 1.85rem;
+        max-width: 2rem;
+        white-space: normal;
+        vertical-align: bottom;
+        padding: 4px 2px;
+      }
+
+      .heatmap th.day {
+        background: #f1f5f9;
+        font-weight: 600;
+        color: #475569;
+        text-align: right;
+        padding-right: 6px;
+        white-space: nowrap;
+      }
+
+      .heatmap td.cell {
+        width: 1.35rem;
+        height: 1.35rem;
+        font-variant-numeric: tabular-nums;
+        color: #0f172a;
+      }
+
+      .analytics-kpi-subtitle {
+        margin: -0.35rem 0 1rem;
+        font-size: 0.8rem;
+        color: #64748b;
+        line-height: 1.4;
+      }
+
+      .analytics-kpi-subtitle--tight {
+        margin: 0 0 0.75rem;
+      }
+
+      .analytics-section-title {
+        margin: 1.25rem 0 0.35rem;
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #334155;
+      }
+
+      .kpi-grid--followup {
+        margin-bottom: 0;
+      }
+
+      .analytics-filter-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        margin-bottom: 0.65rem;
+      }
+
+      .analytics-scope-line {
+        margin: 0 0 1rem;
+        font-size: 0.88rem;
+        font-weight: 600;
+        color: #1e293b;
+      }
+
+      .analytics-tz-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem 0.75rem;
+        margin-bottom: 0.5rem;
+      }
+
+      .analytics-tz-row label {
+        margin: 0;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #334155;
+      }
+
+      .analytics-tz-select {
+        font-family: inherit;
+        font-size: 0.85rem;
+        padding: 0.4rem 0.6rem;
+        border-radius: 8px;
+        border: 1px solid #cbd5e1;
+        background: #fff;
+        color: #0f172a;
+        min-width: 14rem;
+      }
+
+      .analytics-tz-shown {
+        margin: 0 0 1rem;
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #475569;
+      }
+
+      .analytics-subheading {
+        margin: 0 0 0.5rem;
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #475569;
+      }
+
+      .hour-peak-line {
+        margin: 0 0 0.65rem;
+        font-size: 0.84rem;
+        font-weight: 600;
+        color: #334155;
+      }
+
+      .hour-bar-chart {
+        margin-bottom: 1.25rem;
+        padding: 0.75rem 0.5rem 0.25rem;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        background: #fafafa;
+      }
+
+      .hour-bars-row {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 2px;
+        height: 120px;
+        padding: 0 0.15rem;
+      }
+
+      .hour-bar-col {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-end;
+        min-width: 0;
+        height: 120px;
+      }
+
+      .hour-bar-fill-wrap {
+        flex: 1;
+        width: 100%;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        min-height: 0;
+      }
+
+      .hour-bar-fill {
+        width: 100%;
+        max-width: 22px;
+        min-height: 2px;
+        background: linear-gradient(180deg, #0891b2, #6366f1);
+        border-radius: 3px 3px 0 0;
+      }
+
+      .hour-bar-x {
+        margin-top: 4px;
+        font-size: 0.5rem;
+        line-height: 1.05;
+        color: #64748b;
+        text-align: center;
+        max-width: 100%;
+      }
+
+      .slow-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.85rem;
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid #e2e8f0;
+      }
+
+      .slow-table th,
+      .slow-table td {
+        padding: 0.55rem 0.75rem;
+        text-align: left;
+        border-bottom: 1px solid #e2e8f0;
+      }
+
+      .slow-table th {
+        background: #f1f5f9;
+        font-weight: 600;
+        color: #334155;
+      }
+
+      .slow-table td.num {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .slow-table tr:last-child td {
+        border-bottom: none;
+      }
+
+      .mono {
+        font-family: ui-monospace, monospace;
+        font-size: 0.78rem;
+        word-break: break-all;
+      }
+
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header class="brand">
+        <img
+          class="brand-logo"
+          src="logo-orca.png?v=1"
+          width="76"
+          height="76"
+          alt="ORCA"
+        />
+        <div class="brand-copy">
+          <p class="brand-name"><abbr title="Operational Response &amp; Channel Analytics">ORCA</abbr></p>
+          <p class="brand-subtitle">Operational Response &amp; Channel Analytics</p>
+        </div>
+        <div id="demoEnvironmentBadge" class="demo-environment-badge" hidden>
+          Demo Environment — identifiers masked, data simulated
+        </div>
+      </header>
+
+      <nav class="tabs" role="tablist" aria-label="Main">
+        <button type="button" class="tab active" id="tabSearch" role="tab" aria-selected="true" aria-controls="panelSearch">
+          Search &amp; ingest
+        </button>
+        <button type="button" class="tab" id="tabBroadcast" role="tab" aria-selected="false" aria-controls="panelBroadcast">
+          Broadcast
+        </button>
+        <button type="button" class="tab" id="tabAnalytics" role="tab" aria-selected="false" aria-controls="panelAnalytics">
+          Analytics
+        </button>
+      </nav>
+
+      <main class="card panel panel--active" id="panelSearch" role="tabpanel" aria-labelledby="tabSearch">
+        <h1>Search &amp; ingest</h1>
+
+        <section class="section" aria-labelledby="lbl-ingest">
+          <h2 class="section__title" id="lbl-ingest">Ingest from Slack</h2>
+          <p class="section__desc">
+            Pulls thread roots and replies from channels your bot can see and writes embeddings for RAG.
+          </p>
+          <div class="row">
+            <div class="controls">
+              <button type="button" id="ingestBtn" class="primary">Ingest Slack messages</button>
+            </div>
+            <div id="ingestStatus" class="status"></div>
+            <p id="rolesHint" class="roles-hint" aria-live="polite"></p>
+          </div>
+        </section>
+
+        <section class="section section--ask" aria-labelledby="lbl-ask">
+          <h2 class="section__title" id="lbl-ask">Ask the indexed history</h2>
+          <p class="section__desc">
+            Sends your question to the LLM with retrieved Slack context.
+          </p>
+          <div class="row">
+            <label for="questionInput">Your question</label>
+            <textarea
+              id="questionInput"
+              placeholder="What did the team decide about…?"
+              spellcheck="true"
+            ></textarea>
+          </div>
+          <div class="row controls">
+            <button type="button" id="askBtn" class="secondary">Ask</button>
+          </div>
+          <div class="row">
+            <h2 class="section-title">Answer</h2>
+            <div id="answer" class="answer"></div>
+          </div>
+        </section>
+      </main>
+
+      <div class="card panel" id="panelBroadcast" role="tabpanel" aria-labelledby="tabBroadcast">
+        <h1>Message Broadcast</h1>
+        <p class="analytics-hint">
+          Send one message to multiple channels. A confirmation step is always required before sending.
+        </p>
+        <section class="section" aria-labelledby="lbl-broadcast">
+          <h2 class="section__title" id="lbl-broadcast">Broadcast message</h2>
+          <p class="section__desc">
+            Select one or more channels, write your message, then review and confirm before send.
+          </p>
+          <div class="row">
+            <label for="broadcastChannels">Select Channels</label>
+            <select id="broadcastChannels" class="broadcast-select" multiple aria-describedby="broadcastChannelsHelp"></select>
+            <p id="broadcastChannelsHelp" class="broadcast-help">Use Command/Ctrl+Click to select multiple channels.</p>
+          </div>
+          <div class="row">
+            <label for="broadcastMessage">Message</label>
+            <textarea
+              id="broadcastMessage"
+              placeholder="Enter message to send to selected channels..."
+              spellcheck="true"
+            ></textarea>
+          </div>
+          <div class="row">
+            <label class="broadcast-announce" for="broadcastAnnouncement">
+              <input type="checkbox" id="broadcastAnnouncement" />
+              Send as announcement (prefix with 📢)
+            </label>
+          </div>
+          <div class="row controls">
+            <button type="button" id="broadcastSendBtn" class="primary">Send Broadcast</button>
+          </div>
+          <div id="broadcastStatus" class="status"></div>
+          <div id="broadcastPreflight" class="status"></div>
+          <div id="broadcastSummary" class="broadcast-summary"></div>
+        </section>
+      </div>
+
+      <div class="card panel" id="panelAnalytics" role="tabpanel" aria-labelledby="tabAnalytics">
+        <h1>Analytics</h1>
+        <p class="analytics-hint">
+          First staff reply after the first external message per Slack thread. Server timezone default is
+          <code>ANALYTICS_TIMEZONE</code> (or <code>America/New_York</code>); use the Timezone control to re-bucket the
+          heatmap and bar chart without re-fetching. Sample limits are set via
+          <code>ANALYTICS_*</code> env vars (see server docs).
+        </p>
+        <div class="controls" style="margin-bottom: 1rem">
+          <button type="button" id="analyticsRefreshBtn" class="secondary">Refresh</button>
+        </div>
+        <div id="analyticsStatus" class="status"></div>
+        <div id="analyticsContent"></div>
+      </div>
+
+    </div>
+
+    <div id="broadcastConfirmModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="broadcastConfirmTitle">
+      <div class="modal-card">
+        <h2 id="broadcastConfirmTitle" class="modal-title">Confirm Broadcast</h2>
+        <p id="broadcastConfirmText" class="modal-body"></p>
+        <div class="modal-preview">
+          <p><strong>Message</strong></p>
+          <pre id="broadcastConfirmMessage"></pre>
+        </div>
+        <div class="modal-channels">
+          <p><strong>Channels</strong></p>
+          <ul id="broadcastConfirmChannels"></ul>
+        </div>
+        <div class="controls">
+          <button type="button" id="broadcastConfirmBtn" class="primary">Confirm</button>
+          <button type="button" id="broadcastCancelBtn" class="secondary">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="dataProvider.js?v=1"></script>
+    <script src="channelMask.js?v=1"></script>
+    <script src="app.js?v=35"></script>
+  </body>
+</html>

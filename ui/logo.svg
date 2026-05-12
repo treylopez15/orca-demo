@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+  <defs>
+    <linearGradient id="biaFrame" x1="6" y1="6" x2="42" y2="42" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#22d3ee"/>
+      <stop offset="55%" stop-color="#818cf8"/>
+      <stop offset="100%" stop-color="#c084fc"/>
+    </linearGradient>
+    <linearGradient id="biaCore" x1="18" y1="18" x2="30" y2="30" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#f0f9ff"/>
+      <stop offset="100%" stop-color="#e0e7ff"/>
+    </linearGradient>
+  </defs>
+  <rect width="48" height="48" rx="14" fill="#0b1224"/>
+  <rect x="1.25" y="1.25" width="45.5" height="45.5" rx="12.75" stroke="url(#biaFrame)" stroke-width="2"/>
+  <!-- Braided strands -->
+  <path stroke="url(#biaCore)" stroke-width="2" stroke-linecap="round" fill="none" opacity="0.95"
+    d="M13 17c4 0 7 3 11 3s7-3 11-3M13 24c4 0 7 3 11 3s7-3 11-3M13 31c4 0 7-3 11-3s7 3 11 3"/>
+  <circle cx="24" cy="24" r="5" fill="url(#biaFrame)" opacity="0.9"/>
+  <circle cx="24" cy="24" r="2.25" fill="#0b1224"/>
+</svg>
