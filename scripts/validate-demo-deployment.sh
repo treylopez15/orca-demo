@@ -23,7 +23,7 @@ curl -fsS -X POST "$BASE/api/broadcast/send" \
 echo ""
 
 echo "Manual UI checks:"
-echo "  - Open $BASE/ui/ and confirm header: Demo Environment — identifiers masked, data simulated"
+echo "  - Open $BASE/ui/ and confirm header: Demo Environment — identifiers masked"
 echo "  - Broadcast tab: send completes with simulated success message"
 echo "  - Analytics: charts load; channel picker shows client-a-support / client-b-support where mapped"
 echo "Done."

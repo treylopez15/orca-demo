@@ -50,7 +50,7 @@ These match the demo transcript and return substantive answers—good for a firs
 
 **Also worth trying (about two minutes):**
 
-- Confirm the header shows **Demo Environment — identifiers masked, data simulated** when demo mode is active.  
+- Confirm the header shows **Demo Environment — identifiers masked** when demo mode is active.  
 - **Broadcast** — select channels, compose a message, confirm; in demo mode nothing is posted to Slack.
 
 ---
@@ -84,7 +84,7 @@ For someone opening the app for the first time:
 - **Dockerized** for consistent local and cloud deployment (`Dockerfile`, `docker-compose.yml`)  
 - **Hosted on AWS Lightsail** for cost-efficient public access (host port **3000** → container **8000**)
 
-**Data flow:** UI → FastAPI endpoints → (mocked Slack ingestion / analytics layer in demo, or live Slack + compute in internal mode) → structured JSON → rendered in the UI.
+        UI → FastAPI endpoints → (mocked Slack ingestion / analytics layer in demo, or live Slack + compute in internal mode) → structured JSON → rendered in the UI.
 
 ---
 

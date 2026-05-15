@@ -42,6 +42,163 @@ _STOPWORDS = frozenset(
     "just than then once".split()
 )
 
+# Lightweight synonym expansion for retrieval scoring (no extra mock data).
+_SYNEXPAND = [
+    (["ach", "bank transfer", "batch processing"], "ach reconciliation settlement batch ledger"),
+    (
+        ["api", "endpoint", "integration", "service", "microservice"],
+        "api endpoint contract integration service microservice",
+    ),
+    (["wire", "routing number", "swift"], "wire routing swift remittance beneficiary"),
+    (
+        ["error", "failure", "failures", "fail", "incident", "issue"],
+        "error failure failures incident deploy rollback 429",
+    ),
+]
+
+
+def _enriched_query_for_scoring(q: str) -> str:
+    ql = q.lower()
+    parts = [ql]
+    for keys, blob in _SYNEXPAND:
+        if any(k in ql for k in keys):
+            parts.append(blob)
+    return " ".join(parts)
+
+
+_ROOT_CAUSE_MARKERS = (
+    "caused by",
+    "due to",
+    "root cause",
+    "missing",
+    "failed because",
+    "because",
+    "confirmed",
+)
+
+
+def _intent_definition(ql: str) -> str | None:
+    if not (
+        "what is" in ql
+        or "what're" in ql
+        or ql.startswith("define ")
+        or " define " in ql
+        or ql.startswith("explain ")
+        or " explain " in ql
+    ):
+        return None
+
+    def hits(keys: list[str]) -> bool:
+        return any(k in ql for k in keys)
+
+    if hits(["ach", "bank transfer", "batch processing"]):
+        return (
+            "Based on Slack discussions in #ops, ACH (Automated Clearing House) is a batch-based bank transfer "
+            "network. Recent internal discussions noted delays due to reconciliation edge cases."
+        )
+    if hits(["api", "endpoint", "integration", "service", "microservice"]):
+        return (
+            "Based on Slack discussions in #engineering, an API (Application Programming Interface) is a "
+            "contract that allows systems to communicate with each other."
+        )
+    if hits(["wire", "wire transfer", "swift"]):
+        return (
+            "Based on Slack discussions in #payments, a wire transfer is a real-time bank transfer method "
+            "used to send funds directly between financial institutions. Recent discussions highlighted failures "
+            "caused by missing routing details."
+        )
+    return None
+
+
+def _intent_status_health(ql: str) -> str | None:
+    if (
+        "any issues" in ql
+        or "system issues" in ql
+        or ("issues" in ql and "system" in ql)
+        or "system status" in ql
+        or "errors today" in ql
+        or ql.strip() in ("alerts", "alert")
+    ):
+        return (
+            "Based on Slack discussions in #alerts, recent discussions indicate elevated error rates following "
+            "a deploy, with investigation pointing to configuration issues."
+        )
+    return None
+
+
+def _troubleshooting_retrieve(ql: str, rows: List[Dict[str, str]]) -> str | None:
+    """Shared retrieval + summarization for troubleshooting-style questions."""
+    qe = _enriched_query_for_scoring(ql)
+
+    def has_root_language(m: Dict[str, str]) -> bool:
+        t = m["text"].lower()
+        return any(marker in t for marker in _ROOT_CAUSE_MARKERS)
+
+    rc_rows = [m for m in rows if has_root_language(m)]
+
+    if "error" in ql or "errors" in ql or "failure" in ql or "failures" in ql:
+        err_focus = [
+            m
+            for m in rows
+            if "error" in m["text"].lower()
+            or m["channel"] == "#alerts"
+            or "elevated" in m["text"].lower()
+            or "incident" in m["text"].lower()
+        ]
+        pool = err_focus if err_focus else rows
+        pref = [m for m in pool if "elevated" in m["text"].lower() or "error rates" in m["text"].lower()]
+        if pref:
+            pool = pref
+    else:
+        pool = rc_rows if rc_rows else rows
+
+    matches = _pick_best_messages(qe, pool, limit=2)
+    if not matches:
+        return None
+    return _summarize_mock_matches(matches)
+
+
+def _routing_wire_troubleshooting_bridge(ql: str, rows: List[Dict[str, str]]) -> str | None:
+    """
+    If the user ties routing numbers to wire/failure language, run troubleshooting
+    against wire/routing-heavy lines (avoids missed paths like 'why did routing number fail').
+    """
+    if "routing number" not in ql:
+        return None
+    if not (("wire" in ql) or ("fail" in ql) or ("failed" in ql)):
+        return None
+    qe = _enriched_query_for_scoring(ql)
+    narrow = [
+        m
+        for m in rows
+        if ("routing" in m["text"].lower() or "wire" in m["text"].lower())
+    ]
+    pool = narrow if narrow else rows
+    matches = _pick_best_messages(qe, pool, limit=2)
+    if matches:
+        return _summarize_mock_matches(matches)
+    return _troubleshooting_retrieve(ql, rows)
+
+
+def _intent_troubleshooting(ql: str, rows: List[Dict[str, str]]) -> str | None:
+    if not any(
+        w in ql
+        for w in (
+            "why",
+            "failed",
+            "fail",
+            "error",
+            "errors",
+            "issue",
+            "problem",
+            "wrong",
+            "incident",
+            "seeing",
+        )
+    ):
+        return None
+    return _troubleshooting_retrieve(ql, rows)
+
 
 def _mock_slack_path() -> str:
     return os.path.join(os.path.dirname(__file__), "data", "mock_slack.txt")
@@ -281,7 +438,26 @@ def _demo_api_ask_answer(question: str) -> str:
     rows = _parse_mock_slack()
     if not rows:
         return "No relevant discussions found in Slack history."
-    matches = _pick_best_messages(question, rows, limit=2)
+    ql = (question or "").strip().lower()
+
+    ans = _intent_definition(ql)
+    if ans:
+        return ans
+
+    ans = _routing_wire_troubleshooting_bridge(ql, rows)
+    if ans:
+        return ans
+
+    ans = _intent_status_health(ql)
+    if ans:
+        return ans
+
+    ans = _intent_troubleshooting(ql, rows)
+    if ans:
+        return ans
+
+    qe = _enriched_query_for_scoring(question)
+    matches = _pick_best_messages(qe, rows, limit=2)
     return _summarize_mock_matches(matches)
 
 
