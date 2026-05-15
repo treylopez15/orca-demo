@@ -1297,7 +1297,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
-  askBtn?.addEventListener("click", async () => {
+  async function submitAsk() {
     const question = questionInput.value.trim();
     if (!question) {
       answerEl.textContent = "Please enter a question first.";
@@ -1315,5 +1315,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     } finally {
       askBtn.disabled = false;
     }
+  }
+
+  askBtn?.addEventListener("click", submitAsk);
+
+  panelSearch?.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-sample-q]");
+    if (!btn || !questionInput) return;
+    const q = btn.getAttribute("data-sample-q");
+    if (!q) return;
+    e.preventDefault();
+    questionInput.value = q;
+    void submitAsk();
   });
 });

@@ -27,6 +27,15 @@ app = FastAPI()
 
 DEMO_SIMULATED_MSG = "Demo mode: action simulated successfully."
 
+# Shown when demo Ask cannot match indexed mock context with enough confidence.
+DEMO_ANSWER_UNAVAILABLE = (
+    "This is a demo: ORCA doesn’t have relevant indexed context for that question yet, "
+    "so a reliable answer isn’t available."
+)
+
+# Minimum best match score for the generic demo retrieval path (intents bypass this).
+DEMO_RETRIEVAL_MIN_SCORE = 8
+
 
 class AskRequest(BaseModel):
     question: str
@@ -57,11 +66,21 @@ _SYNEXPAND = [
 ]
 
 
+def _query_matches_topic_term(ql: str, term: str) -> bool:
+    """Match phrase or whole token (avoids e.g. 'api' matching inside 'capital')."""
+    t = term.strip().lower()
+    if not t:
+        return False
+    if " " in t:
+        return t in ql
+    return bool(re.search(rf"(?<![a-z0-9]){re.escape(t)}(?![a-z0-9])", ql))
+
+
 def _enriched_query_for_scoring(q: str) -> str:
     ql = q.lower()
     parts = [ql]
     for keys, blob in _SYNEXPAND:
-        if any(k in ql for k in keys):
+        if any(_query_matches_topic_term(ql, k) for k in keys):
             parts.append(blob)
     return " ".join(parts)
 
@@ -81,6 +100,7 @@ def _intent_definition(ql: str) -> str | None:
     if not (
         "what is" in ql
         or "what're" in ql
+        or ("what does" in ql and "mean" in ql)
         or ql.startswith("define ")
         or " define " in ql
         or ql.startswith("explain ")
@@ -89,7 +109,7 @@ def _intent_definition(ql: str) -> str | None:
         return None
 
     def hits(keys: list[str]) -> bool:
-        return any(k in ql for k in keys)
+        return any(_query_matches_topic_term(ql, k) for k in keys)
 
     if hits(["ach", "bank transfer", "batch processing"]):
         return (
@@ -152,7 +172,7 @@ def _troubleshooting_retrieve(ql: str, rows: List[Dict[str, str]]) -> str | None
     else:
         pool = rc_rows if rc_rows else rows
 
-    matches = _pick_best_messages(qe, pool, limit=2)
+    matches, _ = _pick_best_messages(qe, pool, limit=2)
     if not matches:
         return None
     return _summarize_mock_matches(matches)
@@ -174,7 +194,7 @@ def _routing_wire_troubleshooting_bridge(ql: str, rows: List[Dict[str, str]]) ->
         if ("routing" in m["text"].lower() or "wire" in m["text"].lower())
     ]
     pool = narrow if narrow else rows
-    matches = _pick_best_messages(qe, pool, limit=2)
+    matches, _ = _pick_best_messages(qe, pool, limit=2)
     if matches:
         return _summarize_mock_matches(matches)
     return _troubleshooting_retrieve(ql, rows)
@@ -261,13 +281,17 @@ def _score_message(question_l: str, msg: Dict[str, str]) -> int:
         ("system", ("error", "incident", "database", "timeout", "deploy", "elevated")),
     ]
     for qword, needles in anchors:
-        if qword in question_l:
+        if _query_matches_topic_term(question_l, qword):
             if any(n in text_l for n in needles):
                 score += 12
-    if ("why" in question_l or "fail" in question_l) and "wire" in question_l:
+    if ("why" in question_l or "fail" in question_l) and _query_matches_topic_term(
+        question_l, "wire"
+    ):
         if "missing" in text_l and "routing" in text_l:
             score += 25
-    if "routing" in question_l and "wire" in text_l:
+    if _query_matches_topic_term(question_l, "routing") and _query_matches_topic_term(
+        question_l, "wire"
+    ):
         if "routing" in text_l:
             score += 15
     for tok in _question_tokens(question_l):
@@ -308,12 +332,16 @@ def _score_message(question_l: str, msg: Dict[str, str]) -> int:
         ),
     ]
     for q_syns, t_syns in bridges:
-        if any(s in question_l for s in q_syns) and any(s in text_l for s in t_syns):
+        if any(_query_matches_topic_term(question_l, s) for s in q_syns) and any(
+            s in text_l for s in t_syns
+        ):
             score += 4
     return score
 
 
-def _pick_best_messages(question: str, rows: List[Dict[str, str]], limit: int = 3) -> List[Dict[str, str]]:
+def _pick_best_messages(
+    question: str, rows: List[Dict[str, str]], limit: int = 3
+) -> Tuple[List[Dict[str, str]], int]:
     q_low = (question or "").lower()
     scored: List[Tuple[int, Dict[str, str]]] = []
     for msg in rows:
@@ -321,6 +349,7 @@ def _pick_best_messages(question: str, rows: List[Dict[str, str]], limit: int = 
         if s > 0:
             scored.append((s, msg))
     scored.sort(key=lambda x: (-x[0], x[1]["text"]))
+    best_score = scored[0][0] if scored else 0
     seen_txt: set[str] = set()
     out: List[Dict[str, str]] = []
     for _s, msg in scored:
@@ -331,13 +360,13 @@ def _pick_best_messages(question: str, rows: List[Dict[str, str]], limit: int = 
         out.append(msg)
         if len(out) >= limit:
             break
-    return out
+    return out, best_score
 
 
 def _summarize_mock_matches(matches: List[Dict[str, str]]) -> str:
     """Return full user-visible answer: channel-grounded + analysis-style summary."""
     if not matches:
-        return "No relevant discussions found in Slack history."
+        return DEMO_ANSWER_UNAVAILABLE
     channel = matches[0]["channel"]
     summary = _synthesize_analysis_clause(matches)
     return f"Based on Slack discussions in {channel}, {summary}"
@@ -437,7 +466,7 @@ def _synthesize_analysis_clause(matches: List[Dict[str, str]]) -> str:
 def _demo_api_ask_answer(question: str) -> str:
     rows = _parse_mock_slack()
     if not rows:
-        return "No relevant discussions found in Slack history."
+        return DEMO_ANSWER_UNAVAILABLE
     ql = (question or "").strip().lower()
 
     ans = _intent_definition(ql)
@@ -457,7 +486,9 @@ def _demo_api_ask_answer(question: str) -> str:
         return ans
 
     qe = _enriched_query_for_scoring(question)
-    matches = _pick_best_messages(qe, rows, limit=2)
+    matches, best_score = _pick_best_messages(qe, rows, limit=2)
+    if not matches or best_score < DEMO_RETRIEVAL_MIN_SCORE:
+        return DEMO_ANSWER_UNAVAILABLE
     return _summarize_mock_matches(matches)
 
 

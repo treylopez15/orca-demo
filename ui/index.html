@@ -208,6 +208,35 @@
         line-height: 1.45;
       }
 
+      .sample-questions-label {
+        margin: 0 0 0.45rem;
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: #64748b;
+      }
+
+      .sample-questions-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.45rem;
+        margin-bottom: 1rem;
+      }
+
+      button.sample-q {
+        padding: 0.4rem 0.75rem;
+        font-size: 0.8rem;
+        font-weight: 500;
+        background: #f1f5f9;
+        color: #334155;
+        border: 1px solid #e2e8f0;
+        box-shadow: none;
+      }
+
+      button.sample-q:hover:not(:disabled) {
+        background: #e2e8f0;
+        border-color: #cbd5e1;
+      }
+
       .row {
         margin-bottom: 1.25rem;
       }
@@ -826,7 +855,7 @@
         <section class="section" aria-labelledby="lbl-ingest">
           <h2 class="section__title" id="lbl-ingest">Ingest from Slack</h2>
           <p class="section__desc">
-            Pulls thread roots and replies from channels your bot can see and writes embeddings for RAG.
+            Pulls thread roots and replies from channels ORCA can see and writes embeddings for RAG.
           </p>
           <div class="row">
             <div class="controls">
@@ -846,9 +875,23 @@
             <label for="questionInput">Your question</label>
             <textarea
               id="questionInput"
-              placeholder="What did the team decide about…?"
+              placeholder="What does ACH mean?"
               spellcheck="true"
             ></textarea>
+          </div>
+          <p class="sample-questions-label" id="sampleQuestionsLabel">Sample questions (demo)</p>
+          <div
+            class="sample-questions-row"
+            role="group"
+            aria-labelledby="sampleQuestionsLabel"
+          >
+            <button type="button" class="sample-q" data-sample-q="What is an API?">What is an API?</button>
+            <button type="button" class="sample-q" data-sample-q="Why did the wires fail?">
+              Why did the wires fail?
+            </button>
+            <button type="button" class="sample-q" data-sample-q="Are there any system issues?">
+              Are there any system issues?
+            </button>
           </div>
           <div class="row controls">
             <button type="button" id="askBtn" class="secondary">Ask</button>
