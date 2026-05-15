@@ -19,6 +19,12 @@ This public demo runs in **demo mode**, using simulated data to safely showcase 
 
 This project demonstrates end-to-end system design, including API development, frontend integration, analytics modeling, and cloud deployment.
 
+### Demo data model
+
+- **`data/mock_slack.txt`** — a **static, hand-authored Slack-style transcript** (multi-channel threads, realistic names and timestamps). It is **not** live Slack; it exists so demos stay repeatable and safe to share.
+- **Search & Ask (demo)** — `POST /ask` and `POST /api/ask` in demo mode **read that file**, score lines against your question, then return an **analysis-style summary** in the form **“Based on Slack discussions in #channel, …”** — simulating grounded Q&A without embeddings or an external model.
+- **Analytics / Copilot** in demo mode still use the separate **synthetic** numeric dataset in `data/demo_dataset.py` so charts always render; the mock file is for **conversational** answers only.
+
 ---
 
 ## 2. Live Demo
@@ -34,6 +40,14 @@ This project demonstrates end-to-end system design, including API development, f
    - *“what caused the wire rejection?”*  
 4. Open **Analytics** to view response metrics, peak activity, API traffic patterns, and the Copilot summary.
 
+### Suggested demo questions
+
+These match the demo transcript and return substantive answers—good for a first run:
+
+- *"what caused the wire failure?"*
+- *"why was ACH delayed?"*
+- *"are there any system issues?"*
+
 **Also worth trying (about two minutes):**
 
 - Confirm the header shows **Demo Environment — identifiers masked, data simulated** when demo mode is active.  
@@ -46,7 +60,7 @@ This project demonstrates end-to-end system design, including API development, f
 | Area | What it does |
 |------|----------------|
 | **Slack ingestion** | In **internal** mode, pulls thread history and builds embeddings for RAG. In **demo** mode, ingest is **mocked**—no Slack API calls for that action. |
-| **Question answering** | In **internal** mode, `/ask` uses retrieval + LLM over indexed Slack text. In **demo** mode, answers are **simulated** (including keyword-style replies on `/api/ask`). |
+| **Question answering** | In **internal** mode, `/ask` uses retrieval + LLM over indexed Slack text. In **demo** mode, use **Ask** to query a **mock Slack transcript** (`data/mock_slack.txt`) via keyword-style retrieval and summarization — simulates RAG safely without real data or external APIs. |
 | **Analytics dashboard** | First- and follow-up **response times**, **peak message times** (heatmap-style), **API traffic** trends, top endpoints, and an **ORCA Copilot** insight strip. Demo mode uses a **deterministic synthetic dataset** so charts always populate. |
 | **Broadcast** | Multi-channel message flow with **confirmation** before send. In demo mode, the send is **simulated** and returns success without posting to Slack. |
 
@@ -79,7 +93,7 @@ For someone opening the app for the first time:
 | Method & path | Purpose |
 |---------------|---------|
 | **`POST /api/ingest`** | Demo-oriented ingest stub. Returns a fixed **success** payload with sample channel names and a fake indexed count. **Active when `DEMO_MODE=true`**; otherwise **404** so production stacks don’t depend on mock data. |
-| **`POST /api/ask`** | JSON body: `{ "question": "..." }`. Returns `{ "answer": "..." }` with a **simulated** answer (keyword routing for substrings like `api`, `ach`, `wire`). **Demo-only** (`DEMO_MODE=true`). **`POST /ask`** remains for full RAG when not in demo mode. |
+| **`POST /api/ask`** | JSON `{ "question": "..." }` → `{ "answer": "..." }`. **Demo-only.** Answers are built from **`data/mock_slack.txt`** (keyword retrieval + short summaries). **`POST /ask`** uses the same logic in demo mode for the web UI. |
 | **`GET /health`** | Liveness probe: `{ "status": "ok", "demoMode": true|false }`. Safe for load balancers and scripts. |
 
 Additional routes (broadcast, analytics, insights, roles, config, etc.) live in **`main.py`**; operators can see **`DEPLOYMENT.md`** for runbooks.

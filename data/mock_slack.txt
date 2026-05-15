@@ -1,0 +1,86 @@
+#payments
+[2026-05-10 09:12] John: The wire failed due to a missing routing number.
+[2026-05-10 09:20] Justin: Root cause confirmed — validation didn’t catch it before the payment left our queue.
+[2026-05-10 10:05] Sarah: Can we add a pre-submit check for nine-digit routing codes?
+[2026-05-10 10:18] Chris: Yes — I’ll scope it for next sprint; same validation gap hit two wires this week.
+
+#engineering
+[2026-05-09 14:22] Maya: APIs are how our services communicate — contract-first is the rule.
+[2026-05-09 14:30] Chris: Think of it like a menu: you request an endpoint and get a structured response back.
+[2026-05-09 15:01] Daniel: The transaction API is returning 429s under load — we need backoff in the client.
+[2026-05-09 15:40] Emily: I’ll add retries with jitter; document the rate limits in the developer portal.
+
+#ops
+[2026-05-08 11:03] Sarah: ACH rollout delayed due to reconciliation edge cases in overnight batching.
+[2026-05-08 11:10] Daniel: We need better validation before release — some settlement totals didn’t tie to the ledger.
+[2026-05-08 13:22] Kevin: Ops approved a Friday cutover once finance signs off on the reconciliation fixes.
+[2026-05-08 14:00] Maya: Monitoring will page us if ACH volume drops unexpectedly during migration.
+
+#support
+[2026-05-07 16:45] Emily: Customer asked why their international wire bounced — same routing-number typo as last week.
+[2026-05-07 17:02] John: I walked them through fixing the beneficiary bank details in the portal.
+[2026-05-08 09:15] Justin: Support queue is heavy on ACH timing questions — can we publish clearer cut-off times?
+[2026-05-08 09:30] Sarah: I’ll update the FAQ; recurring theme is “when does same-day ACH actually settle?”
+
+#alerts
+[2026-05-07 08:15] Emily: Seeing elevated error rates on the transaction API — graphs are spiking in us-east.
+[2026-05-07 08:18] Kevin: Might be tied to the latest deploy; rolling back the canary now.
+[2026-05-07 09:45] Chris: Incident resolved; root cause was a bad config toggling timeouts on payment routes.
+[2026-05-10 07:55] Daniel: Pager fired — database connection pool exhausted on the auth service.
+[2026-05-10 08:10] Maya: Scaled the pool and added an alert before we hit saturation again.
+
+#dev
+[2026-05-06 10:00] Chris: New hire onboarding — here’s the repo map and how to run the stack locally.
+[2026-05-06 10:12] Maya: For your first integration, wire up the sandbox keys before touching prod.
+[2026-05-06 11:30] Kevin: Quick start doc covers API keys, webhooks, and ACH vs wire test cases.
+[2026-05-09 09:00] Daniel: Feature branch for bulk ACH export — please flag any schema surprises in review.
+[2026-05-09 11:20] Emily: Found a bug where partial failures weren’t surfaced in the batch job summary.
+[2026-05-09 11:35] John: Filed a ticket; unexpected 500 body was being swallowed by the client SDK.
+
+#payments
+[2026-05-11 08:40] Maya: Finance wants approval routing for wires over 250k — who’s the second approver?
+[2026-05-11 09:10] Sarah: Sarah and Kevin rotate; document it in ops runbook.
+[2026-05-11 10:00] Justin: Wire SLA is still 2 hours unless manual review — align messaging with sales.
+
+#engineering
+[2026-05-10 11:22] Kevin: Load test showed the partner API chokes above 200 RPS — we should queue requests server-side.
+[2026-05-10 12:05] Emily: Agreed; also add circuit breaking so we fail fast instead of hanging integrations.
+
+#ops
+[2026-05-09 07:30] Chris: Overnight ACH batch was slow — reconciliation job ran 40 minutes long.
+[2026-05-09 08:00] Daniel: Database index on settlement_id should help; deploying tonight with change window approval.
+
+#support
+[2026-05-10 15:00] Kevin: User onboarding question — do sandbox webhooks mirror prod delays?
+[2026-05-10 15:14] Maya: Mostly yes; ACH simulation is faster; callouts are in the dev guide.
+
+#alerts
+[2026-05-08 22:10] John: Synthetic checks caught latency on /v1/transfers before customers noticed.
+[2026-05-08 22:25] Sarah: Nice — keep the threshold tight until we finish the performance sprint.
+
+#dev
+[2026-05-07 13:40] Daniel: Onboarding checklist item — enable audit logging before first go-live.
+[2026-05-07 14:02] Chris: Also rotate sandbox keys after integration testing; they were leaked in a screenshot once.
+
+#payments
+[2026-05-09 17:50] Emily: Customer hit validation on SWIFT field length — rejected before it became a wire failure.
+[2026-05-09 18:05] Justin: Good — better to fail fast than reverse an originated wire.
+
+#support
+[2026-05-09 12:00] Maya: Ticket volume trending up on “unexpected error” after file uploads — client needs clearer messages.
+[2026-05-09 12:20] John: UX copy fix goes out tomorrow; backend errors already include error codes for support.
+
+#engineering
+[2026-05-08 16:00] Sarah: Design review — public API versioning policy for breaking JSON fields.
+[2026-05-08 16:45] Daniel: We’ll deprecate v1 endpoints in 90 days with email + changelog.
+
+#ops
+[2026-05-10 18:00] Kevin: Change freeze next week — only P1 fixes for ACH stabilization.
+[2026-05-10 18:15] Emily: Communicated to partners; retries during freeze go to the ops on-call.
+
+#alerts
+[2026-05-09 03:00] Chris: False positive on disk alert — log rotation ate the mount; tuning thresholds.
+
+#dev
+[2026-05-10 14:30] Emily: New integration test covers wire + ACH happy path plus idempotency headers.
+[2026-05-10 15:00] Kevin: CI failed once on flaky webhook mock — increasing wait window to 500ms.

@@ -1,6 +1,7 @@
 import os
+import re
 import time
-from typing import Any, Dict
+from typing import Any, Dict, List, Tuple
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
@@ -31,15 +32,257 @@ class AskRequest(BaseModel):
     question: str
 
 
+_STOPWORDS = frozenset(
+    "a an the and or but if is are was were be been being to for of in on at by "
+    "with from as it its this that these those what which who whom whose when where "
+    "why how all any both each few more most other some such no nor not only same so "
+    "than too very can could should would may might must shall will do does did doing "
+    "done we you your they them their our my me i he she his her has have had having "
+    "there here about into through during before after above below out up down any "
+    "just than then once".split()
+)
+
+
+def _mock_slack_path() -> str:
+    return os.path.join(os.path.dirname(__file__), "data", "mock_slack.txt")
+
+
+_mock_slack_cache: List[Dict[str, str]] | None = None
+
+
+def _parse_mock_slack() -> List[Dict[str, str]]:
+    global _mock_slack_cache
+    if _mock_slack_cache is not None:
+        return _mock_slack_cache
+    path = _mock_slack_path()
+    out: List[Dict[str, str]] = []
+    if not os.path.isfile(path):
+        _mock_slack_cache = []
+        return _mock_slack_cache
+    channel = "#general"
+    line_re = re.compile(
+        r"^\[\s*(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})\s*\]\s+([^:]+):\s*(.+)\s*$"
+    )
+    with open(path, encoding="utf-8") as f:
+        for raw in f:
+            line = raw.rstrip("\n")
+            if not line.strip():
+                continue
+            if line.startswith("#"):
+                channel = line.split()[0] if line.split() else channel
+                continue
+            m = line_re.match(line)
+            if not m:
+                continue
+            out.append(
+                {
+                    "channel": channel,
+                    "when": m.group(1).strip(),
+                    "speaker": m.group(2).strip(),
+                    "text": m.group(3).strip(),
+                }
+            )
+    _mock_slack_cache = out
+    return _mock_slack_cache
+
+
+def _question_tokens(q: str) -> set[str]:
+    return {w for w in re.findall(r"[a-z0-9']+", q.lower()) if len(w) > 2 and w not in _STOPWORDS}
+
+
+def _score_message(question_l: str, msg: Dict[str, str]) -> int:
+    text_l = msg["text"].lower()
+    score = 0
+    # Strong anchors when the question names a topic explicitly
+    anchors = [
+        ("api", ("api", "endpoint", "contract", "service")),
+        ("wire", ("wire", "routing", "swift")),
+        ("ach", ("ach", "reconciliation", "batch", "settlement")),
+        ("onboard", ("onboard", "sandbox", "integration", "repo", "checklist")),
+        ("error", ("error", "fail", "500", "429", "unexpected")),
+        ("alert", ("alert", "pager", "incident", "spike", "elevated")),
+        ("system", ("error", "incident", "database", "timeout", "deploy", "elevated")),
+    ]
+    for qword, needles in anchors:
+        if qword in question_l:
+            if any(n in text_l for n in needles):
+                score += 12
+    if ("why" in question_l or "fail" in question_l) and "wire" in question_l:
+        if "missing" in text_l and "routing" in text_l:
+            score += 25
+    if "routing" in question_l and "wire" in text_l:
+        if "routing" in text_l:
+            score += 15
+    for tok in _question_tokens(question_l):
+        if tok in text_l:
+            score += 3 if len(tok) > 4 else 2
+    bridges: List[Tuple[Tuple[str, ...], Tuple[str, ...]]] = [
+        (
+            ("wire", "routing", "swift", "remittance", "beneficiary", "bounce"),
+            ("wire", "routing", "swift", "reject"),
+        ),
+        (
+            ("ach", "reconciliation", "settlement", "batch", "ledger"),
+            ("ach", "reconciliation", "settlement", "batch"),
+        ),
+        (
+            ("api", "endpoint", "request", "integration", "rate", "contract", "version"),
+            ("api", "endpoint", "429", "timeout", "json"),
+        ),
+        (
+            ("error", "fail", "failure", "bug", "500", "broken", "wrong"),
+            ("error", "fail", "bug", "500", "429", "unexpected"),
+        ),
+        (
+            ("alert", "pager", "incident", "outage", "downtime", "spike", "elevated", "monitor", "system"),
+            ("alert", "pager", "incident", "spike", "deploy", "latency", "database", "elevated"),
+        ),
+        (
+            ("onboard", "setup", "sandbox", "key", "credential", "checklist"),
+            ("onboard", "sandbox", "key", "integration", "checklist", "repo"),
+        ),
+        (
+            ("system", "issue", "problem", "seeing", "happen"),
+            ("error", "incident", "elevated", "deploy", "database", "timeout", "spike"),
+        ),
+        (
+            ("delay", "slow", "timing", "cut-off", "same-day", "when"),
+            ("delay", "slow", "timing", "cut", "batch", "sla", "ach"),
+        ),
+    ]
+    for q_syns, t_syns in bridges:
+        if any(s in question_l for s in q_syns) and any(s in text_l for s in t_syns):
+            score += 4
+    return score
+
+
+def _pick_best_messages(question: str, rows: List[Dict[str, str]], limit: int = 3) -> List[Dict[str, str]]:
+    q_low = (question or "").lower()
+    scored: List[Tuple[int, Dict[str, str]]] = []
+    for msg in rows:
+        s = _score_message(q_low, msg)
+        if s > 0:
+            scored.append((s, msg))
+    scored.sort(key=lambda x: (-x[0], x[1]["text"]))
+    seen_txt: set[str] = set()
+    out: List[Dict[str, str]] = []
+    for _s, msg in scored:
+        key = msg["text"][:160]
+        if key in seen_txt:
+            continue
+        seen_txt.add(key)
+        out.append(msg)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _summarize_mock_matches(matches: List[Dict[str, str]]) -> str:
+    """Return full user-visible answer: channel-grounded + analysis-style summary."""
+    if not matches:
+        return "No relevant discussions found in Slack history."
+    channel = matches[0]["channel"]
+    summary = _synthesize_analysis_clause(matches)
+    return f"Based on Slack discussions in {channel}, {summary}"
+
+
+def _lc_sentence(text: str) -> str:
+    """Lowercase sentence lead for readability after '..., ' (preserve common acronyms)."""
+    t = text.strip().rstrip(".")
+    if not t:
+        return t
+    first = t.split(maxsplit=1)[0]
+    if first in ("APIs", "API", "ACH", "SLA", "SQL", "KPIs", "JSON"):
+        return t
+    return t[0].lower() + t[1:] if len(t) > 1 else t.lower()
+
+
+def _synthesize_analysis_clause(matches: List[Dict[str, str]]) -> str:
+    """Turn 1–2 retrieved messages into one polished clause (no leading prefix)."""
+    for m in matches:
+        tl = m["text"].lower()
+        if "apis are how" in tl or ("think of it" in tl and "menu" in tl):
+            return (
+                "the team frames APIs as the contract through which services communicate, "
+                "with contract-first design as the rule."
+            )
+    if matches:
+        ta0 = matches[0]["text"].lower()
+        if "ach rollout delayed" in ta0 or (
+            "ach" in ta0 and "reconciliation" in ta0 and "delayed" in ta0
+        ):
+            return (
+                "the ACH rollout was delayed due to reconciliation edge cases in overnight batching, "
+                "with stronger validation planned before release."
+            )
+
+    if len(matches) == 1:
+        t = matches[0]["text"]
+        tl = t.lower()
+        if "missing" in tl and "routing" in tl and "wire" in tl:
+            return "the wire failure was caused by a missing routing number that upfront validation did not catch."
+        if "apis are how" in tl or ("api" in tl and "communicate" in tl):
+            return (
+                "the team frames APIs as the contract through which services communicate, "
+                "with contract-first design as the rule."
+            )
+        if "ach rollout delayed" in tl or ("ach" in tl and "reconciliation" in tl):
+            return (
+                "the ACH rollout was delayed due to reconciliation edge cases in overnight batching, "
+                "with stronger validation planned before release."
+            )
+        if "elevated error" in tl or ("error rates" in tl and "transaction api" in tl):
+            return (
+                "monitoring showed elevated error rates on the transaction API (likely deploy-related); "
+                "the team mitigated with rollback and timeout adjustments."
+            )
+        if "onboarding" in tl and ("repo" in tl or "stack" in tl):
+            return (
+                "onboarding walks new hires through the repo, local stack setup, and sandbox keys before production work."
+            )
+        if "database connection pool" in tl or "pool exhausted" in tl:
+            return (
+                "operations addressed database connection pool exhaustion on the auth service and improved alerting."
+            )
+        return f"{_lc_sentence(t)}."
+
+    a, b = matches[0], matches[1]
+    ta, tb = a["text"].lower(), b["text"].lower()
+    if ("wire" in ta or "routing" in ta) and ("validation" in tb or "catch" in tb):
+        return "the wire failure was caused by a missing routing number that validation did not catch before the payment left the queue."
+    if "ach" in ta and "reconciliation" in ta and ("validation" in tb or "release" in tb or "freeze" in tb):
+        return (
+            "the ACH delay stemmed from reconciliation edge cases; the team is tightening validation "
+            "and coordinating a controlled cutover window."
+        )
+    if ("error" in ta or "spiking" in ta or "elevated" in ta) and (
+        "deploy" in tb or "rollback" in tb or "resolved" in tb or "config" in tb
+    ):
+        return (
+            "the team traced elevated errors to deploy and configuration issues, used rollback where needed, "
+            "and restored stable behavior on payment routes."
+        )
+    if ("database" in ta or "index" in ta or "batch" in ta) and (
+        "incident" in tb or "resolved" in tb or "config" in tb or "timeout" in tb
+    ):
+        return (
+            "operations improved batch performance (for example via indexing) while incident response focused on "
+            "bad deploy config affecting payment-route timeouts."
+        )
+    if "api" in ta and ("retry" in tb or "429" in tb or "backoff" in tb):
+        return (
+            "engineering addressed transaction API load issues with client backoff, retries, and clearer rate-limit guidance."
+        )
+    body_a, body_b = _lc_sentence(a["text"]), _lc_sentence(b["text"])
+    return f"{body_a}, and further discussion noted that {body_b}."
+
+
 def _demo_api_ask_answer(question: str) -> str:
-    q = (question or "").lower()
-    if "api" in q:
-        return "An API (Application Programming Interface) lets systems communicate with each other."
-    if "ach" in q:
-        return "The team delayed the ACH rollout due to reconciliation edge cases."
-    if "wire" in q:
-        return "A missing routing number caused the wire rejection."
-    return "Based on Slack history, no major issues were identified. Team activity looks stable."
+    rows = _parse_mock_slack()
+    if not rows:
+        return "No relevant discussions found in Slack history."
+    matches = _pick_best_messages(question, rows, limit=2)
+    return _summarize_mock_matches(matches)
 
 
 class BroadcastSendRequest(BaseModel):
@@ -72,7 +315,7 @@ def api_ingest_demo() -> Dict[str, Any]:
         raise HTTPException(status_code=404, detail="Available in demo mode only")
     return {
         "status": "success",
-        "channels": ["#payments", "#ops", "#alerts"],
+        "channels": ["#payments", "#engineering", "#ops", "#support", "#alerts", "#dev"],
         "messagesIndexed": 1287,
     }
 
@@ -349,7 +592,7 @@ def ask(body: AskRequest) -> Dict[str, Any]:
 
     if is_demo_mode():
         return {
-            "answer": DEMO_SIMULATED_MSG,
+            "answer": _demo_api_ask_answer(body.question),
             "success": True,
             "message": DEMO_SIMULATED_MSG,
             "demo": True,
